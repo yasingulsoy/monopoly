@@ -21,6 +21,7 @@ interface Props {
   onAcceptPayChallenge: () => void;
   onMoveWild: (propertyId: string, color: PropertyColor) => void;
   onReset: () => void;
+  onLeave: () => void;
 }
 
 type Modal =
@@ -33,7 +34,7 @@ type Modal =
   | { t: "bankOrAction"; card: CardInstance }
   | { t: "moveWild"; propertyId: string; colors: PropertyColor[] };
 
-export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTurn, onChat, onJustSayNo, onAcceptSteal, onAcceptPayChallenge, onMoveWild, onReset }: Props) {
+export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTurn, onChat, onJustSayNo, onAcceptSteal, onAcceptPayChallenge, onMoveWild, onReset, onLeave }: Props) {
   const [modal, setModal] = useState<Modal>({ t: "none" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [discardMode, setDiscardMode] = useState(false);
@@ -121,7 +122,13 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
 
         {/* ── ÜST: her zaman görünür ── */}
         <div className="shrink-0 space-y-2 pb-2">
-          <StatusBar state={state} isMyTurn={isMyTurn} onReset={onReset} onToggleChat={() => setChatOpen(v => !v)} />
+          <StatusBar
+            state={state}
+            isMyTurn={isMyTurn}
+            onReset={onReset}
+            onLeave={onLeave}
+            onToggleChat={() => setChatOpen(v => !v)}
+          />
 
           {state.announcement && (
             <div className="truncate rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-center text-sm font-semibold text-amber-200 [@media(max-height:560px)]:py-0.5 [@media(max-height:560px)]:text-xs">
@@ -213,8 +220,10 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
                   {discardSelected.size}/{discardNeeded} seçildi
                 </span>
               )}
-              {canPlay && !discardMode && (
-                <span className="hidden text-[11px] text-slate-500 sm:inline">Oynamak için karta dokun</span>
+              {!discardMode && (
+                <span className="hidden text-[11px] text-slate-500 sm:inline">
+                  {canPlay ? "Oynamak için karta dokun" : whyBlocked(state, isMyTurn, paying)}
+                </span>
               )}
             </div>
             <div className="flex shrink-0 gap-2">
@@ -425,13 +434,36 @@ function RotateHint() {
 
 // ─── DURUM ÇUBUĞU ───
 
-function StatusBar({ state, isMyTurn, onReset, onToggleChat }: {
-  state: GameState; isMyTurn: boolean; onReset: () => void; onToggleChat: () => void;
+/** El oynanamıyorsa sebebini tek cümleyle söyler */
+function whyBlocked(state: GameState, isMyTurn: boolean, paying: boolean): string {
+  if (paying) return "Önce borcunu öde";
+  if (state.pendingPayChallenge) return "Reddet zinciri sürüyor";
+  if (state.pendingSteal) return "Cevap bekleniyor";
+  if (state.activePayment) return "Ödemeler tamamlanmayı bekliyor";
+  if (!isMyTurn) {
+    const n = state.players.find(p => p.id === state.currentPlayerId)?.name ?? "?";
+    return `Sıra ${n}'de — bekle`;
+  }
+  if (state.playsRemaining === 0) return "Hamle hakkın bitti, turu bitir";
+  return "";
+}
+
+function StatusBar({ state, isMyTurn, onReset, onLeave, onToggleChat }: {
+  state: GameState; isMyTurn: boolean;
+  onReset: () => void; onLeave: () => void; onToggleChat: () => void;
 }) {
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
-  const unread = state.chat.length;
+
+  // Sıra sendeyse çubuk yeşil çerçeveyle öne çıkar
+  const tone = state.phase === "finished"
+    ? "border-yellow-500/50 bg-yellow-950/30"
+    : isMyTurn
+      ? "border-emerald-500/60 bg-emerald-950/30"
+      : "border-slate-700/50 bg-slate-800/80";
+
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-700/50 bg-slate-800/80 px-3 py-2 shadow-md">
+    <div className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 shadow-md transition-colors ${tone}`}>
       {state.phase === "finished" ? (
         <>
           <span className="text-base font-black text-yellow-300">🏆 {state.winnerName} KAZANDI!</span>
@@ -443,13 +475,13 @@ function StatusBar({ state, isMyTurn, onReset, onToggleChat }: {
       ) : (
         <>
           <div className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-full ${isMyTurn ? "animate-pulse bg-green-400" : "bg-amber-400"}`} />
+            <span className={`h-2.5 w-2.5 rounded-full ${isMyTurn ? "animate-pulse bg-emerald-400" : "bg-amber-400"}`} />
             <span className="text-sm font-bold text-white">
               {isMyTurn ? "SENİN TURUN" : `${currentPlayer?.name ?? "?"} oynuyor`}
             </span>
           </div>
-          {isMyTurn && state.playsRemaining > 0 && (
-            <span className="rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+          {isMyTurn && state.playsRemaining > 0 && !state.activePayment && (
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
               {state.playsRemaining} hamle kaldı
             </span>
           )}
@@ -463,11 +495,33 @@ function StatusBar({ state, isMyTurn, onReset, onToggleChat }: {
               Ödeme bekleniyor
             </span>
           )}
+
           <span className="ml-auto text-[11px] text-slate-400">Deste: {state.drawPileCount}</span>
+
           <button type="button" onClick={onToggleChat}
             className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-600 xl:hidden">
-            💬 {unread > 0 && unread}
+            💬
           </button>
+
+          {confirmLeave ? (
+            <span className="flex items-center gap-1">
+              <span className="text-[11px] text-slate-300">Emin misin?</span>
+              <button type="button" onClick={() => { setConfirmLeave(false); onLeave(); }}
+                className="rounded-lg bg-red-600 px-2 py-1 text-[11px] font-bold text-white hover:bg-red-500">
+                Ayrıl
+              </button>
+              <button type="button" onClick={() => setConfirmLeave(false)}
+                className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-600">
+                Vazgeç
+              </button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => setConfirmLeave(true)}
+              title="Oyundan ayrıl — yerin korunur, aynı cihazdan geri dönebilirsin"
+              className="rounded-lg border border-slate-600 px-2 py-1 text-[11px] text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-300">
+              Ayrıl
+            </button>
+          )}
         </>
       )}
     </div>

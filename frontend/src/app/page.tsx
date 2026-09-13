@@ -76,6 +76,7 @@ export default function Home() {
             joinedAs={myName}
             onJoin={g.join}
             onStart={g.start}
+            onLeave={g.leave}
           />
         ) : (
           <div className="h-full">
@@ -92,6 +93,7 @@ export default function Home() {
               onAcceptPayChallenge={g.acceptPayChallenge}
               onMoveWild={g.moveWild}
               onReset={g.reset}
+              onLeave={g.leave}
             />
           </div>
         )}

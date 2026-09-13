@@ -157,6 +157,27 @@ export class Game {
     if (this.cur()?.id === pid) this.advanceTurn();
   }
 
+  /**
+   * Oyuncu kendi isteğiyle ayrılır.
+   * Lobide: koltuk tamamen boşalır ve cihaz bağı silinir — o cihazdan başka isimle girilebilir.
+   * Oyunda: yeri korunur, çevrimdışı sayılır; aynı cihazdan kaldığı yerden dönebilir.
+   */
+  leave(pid: string, device?: string): string | null {
+    const p = this.p(pid);
+    if (!p) return "Oyuncu yok";
+
+    if (this.phase === "lobby") {
+      this.players = this.players.filter(x => x.id !== pid);
+      if (device) this.devices.delete(device);
+      this.log(`${p.name} lobiden ayrıldı`);
+      return null;
+    }
+
+    this.log(`${p.name} oyundan ayrıldı — yeri korunuyor, geri dönebilir`);
+    this.disconnect(pid);
+    return null;
+  }
+
   sendChat(sid: string, text: string) {
     const p = this.p(sid); if (!p || !text.trim()) return;
     this.chat.push({ id: `c${chatId++}`, playerName: p.name, text: text.trim().slice(0, 300), timestamp: Date.now() });

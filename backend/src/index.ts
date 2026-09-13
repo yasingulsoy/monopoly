@@ -79,6 +79,20 @@ io.on("connection", (socket) => {
     broadcast();
   });
 
+  socket.on("game:leave", ({ device }: { device?: string }) => {
+    const id = pid();
+    if (!id) return;
+    handle(socket, () => {
+      const e = game.leave(id, device ? String(device).slice(0, 100) : undefined);
+      if (e) return e;
+      // Bu soket artık hiçbir oyuncuya bağlı değil — lobi görünümüne döner
+      socket.data.pid = undefined;
+      if (activeSocket.get(id) === socket.id) activeSocket.delete(id);
+      if (voice.delete(id)) { io.emit("voice:left", { id }); broadcastVoice(); }
+      return null;
+    });
+  });
+
   socket.on("game:start", () => handle(socket, () => pid() ? game.start() : "Önce katıl"));
   socket.on("game:reset", () => handle(socket, () => pid() ? game.reset() : "Önce katıl"));
 

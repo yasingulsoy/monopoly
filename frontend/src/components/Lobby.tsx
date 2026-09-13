@@ -10,6 +10,7 @@ interface Props {
   connected: boolean;
   onJoin: (name: string) => void;
   onStart: () => void;
+  onLeave: () => void;
   phase?: "lobby" | "playing" | "finished";
   /** Bu cihazdan katılmış oyuncunun adı — katıldıysan isim formu kapanır */
   joinedAs?: string;
@@ -23,6 +24,7 @@ export function Lobby({
   connected,
   onJoin,
   onStart,
+  onLeave,
   phase = "lobby",
   joinedAs,
 }: Props) {
@@ -66,13 +68,24 @@ export function Lobby({
 
         {/* İsim girişi — katıldıysan kapanır (bir cihaz = bir oyuncu) */}
         {joinedAs ? (
-          <div className="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-4 text-center">
-            <p className="text-sm text-emerald-200">
-              <span className="font-bold">{joinedAs}</span> olarak katıldın
-            </p>
-            <p className="mt-1 text-xs text-emerald-300/70">
-              Bu cihazdan tek oyuncu oynayabilir. Diğerleri kendi telefon/bilgisayarından girsin.
-            </p>
+          <div className="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-emerald-200">
+                  <span className="font-bold">{joinedAs}</span> olarak katıldın
+                </p>
+                <p className="mt-0.5 text-xs text-emerald-300/70">
+                  Bu cihazdan tek oyuncu oynar. Diğerleri kendi telefonundan girsin.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onLeave}
+                className="shrink-0 rounded-lg border border-slate-600 px-3 py-1.5 text-xs font-medium text-slate-300 transition-colors hover:border-red-500/50 hover:bg-red-950/40 hover:text-red-300"
+              >
+                Vazgeç
+              </button>
+            </div>
           </div>
         ) : (
           <div className="mb-6">

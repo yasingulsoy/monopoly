@@ -65,6 +65,10 @@ export function useGame() {
       try { localStorage.setItem(NAME_KEY, name.trim()); } catch { /* özel pencere vb. */ }
       emit("join", { name, device: deviceId() });
     },
+    leave: () => {
+      try { localStorage.removeItem(NAME_KEY); } catch { /* özel pencere vb. */ }
+      emit("game:leave", { device: deviceId() });
+    },
     chat: (text: string) => emit("chat:send", { text }),
     start: () => emit("game:start"),
     reset: () => emit("game:reset"),
