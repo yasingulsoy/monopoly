@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.next/
+out/
+*.tsbuildinfo
+
+# Ortam değişkenleri — .env.example paylaşılır, .env paylaşılmaz
+.env
+.env.local
+.env.*.local
+
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

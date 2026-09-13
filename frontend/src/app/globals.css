@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0e1a;
+  --surface: #1e293b;
+  --accent: #3b82f6;
+}
+
+body {
+  background: radial-gradient(ellipse at top, #1a2332 0%, #0a0e1a 60%);
+  min-height: 100vh;
+  color: #f8fafc;
+}
+
+/* Kart yüzlerindeki başlık/isim yazıları — Kabel benzeri geometrik sans */
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "kern" 1;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes slide-in-from-top {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-in {
+  animation: slide-in-from-top 0.3s ease-out;
+}

@@ -1,0 +1,29 @@
+# Render'da "Blueprint" olarak içeri aktarılabilir.
+# Repoyu bağladıktan sonra FRONTEND_URL'i Vercel adresinle güncelle.
+services:
+  - type: web
+    name: istanbul-deal-backend
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: FRONTEND_URL
+        sync: false # Vercel adresini Render panelinden gir
+      - key: PLAYER1_NAME
+        value: yasin
+      - key: PLAYER2_NAME
+        value: yunus
+      - key: PLAYER3_NAME
+        value: serkan
+      - key: PLAYER4_NAME
+        value: zorbey
+      - key: MIN_PLAYERS
+        value: "2"
+      - key: MAX_PLAYERS
+        value: "5"
