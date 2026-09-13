@@ -29,9 +29,10 @@ export default function Home() {
   const inLobby = !g.joined || g.state.phase === "lobby";
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-white">
-      <header className="border-b border-slate-800 bg-slate-900/80 backdrop-blur px-6 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-black tracking-tight">
+    <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-white">
+      {/* Kısa ekranda (yatay telefon) başlık inceliyor ki masaya yer kalsın */}
+      <header className="flex shrink-0 items-center justify-between border-b border-slate-800 bg-slate-900/80 px-3 py-2 backdrop-blur sm:px-5 [@media(max-height:560px)]:py-1">
+        <h1 className="truncate text-base font-black tracking-tight sm:text-lg [@media(max-height:560px)]:text-sm">
           <span className="text-red-500">Istanbul</span> Monopoly Deal
         </h1>
         <div className="flex items-center gap-3">
@@ -61,7 +62,7 @@ export default function Home() {
         </div>
       )}
 
-      <main className="flex-1 overflow-hidden p-4 lg:p-5">
+      <main className="min-h-0 flex-1 overflow-hidden p-2 sm:p-4 lg:p-5 [@media(max-height:560px)]:p-1.5">
         {inLobby ? (
           <Lobby
             allowedNames={g.state.allowedNames}
@@ -74,7 +75,7 @@ export default function Home() {
             onStart={g.start}
           />
         ) : (
-          <div className="h-[calc(100vh-5rem)]">
+          <div className="h-full">
             <GameBoard
               state={g.state}
               onBank={g.bank}

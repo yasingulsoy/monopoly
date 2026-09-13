@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
   CardInstance, GameState, PlayActionParams, PropertyColor, PublicPlayer, PlacedProperty,
 } from "@/lib/types";
@@ -38,11 +38,17 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [discardMode, setDiscardMode] = useState(false);
   const [discardSelected, setDiscardSelected] = useState<Set<string>>(new Set());
+  const [chatOpen, setChatOpen] = useState(false);
+  const compact = useCompact();
 
   const me = state.players.find((p) => p.id === state.myId);
   const hand = state.myHand ?? [];
   const isMyTurn = state.currentPlayerId === state.myId;
-  const opponents = state.players.filter((p) => p.id !== state.myId);
+  // Rakipler sıra düzeninde: benden sonra oynayacak kişi en üstte
+  const myIdx = state.players.findIndex(p => p.id === state.myId);
+  const opponents = myIdx >= 0
+    ? [...state.players.slice(myIdx + 1), ...state.players.slice(0, myIdx)]
+    : state.players.filter(p => p.id !== state.myId);
   const paying = state.activePayment?.fromPlayerId === state.myId;
   const myJustSayNo = hand.find(c => c.kind === "just_say_no");
   const myCompleteSets = me ? ALL_COLORS.filter((c) => isComplete(me, c)) : [];
@@ -107,99 +113,114 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
   ] : [];
 
   return (
-    <div className="flex h-full min-h-0 gap-3">
-      {/* Sol: Oyun masası */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-2">
+    <div className="relative flex h-full min-h-0 gap-3">
+      <RotateHint />
 
-        {state.announcement && (
-          <div className="rounded-xl border border-amber-400/40 bg-gradient-to-r from-amber-500/10 to-orange-500/10 px-5 py-3 text-center font-semibold text-amber-200 shadow-lg">
-            {state.announcement}
-          </div>
-        )}
+      {/* Masa: üstte durum, ortada oyuncular, altta el */}
+      <div className="flex min-h-0 flex-1 flex-col">
 
-        <StatusBar state={state} isMyTurn={isMyTurn} onReset={onReset} />
+        {/* ── ÜST: her zaman görünür ── */}
+        <div className="shrink-0 space-y-2 pb-2">
+          <StatusBar state={state} isMyTurn={isMyTurn} onReset={onReset} onToggleChat={() => setChatOpen(v => !v)} />
 
-        {/* Pending Steal */}
-        {state.pendingSteal && (
-          <PendingStealPanel
-            steal={state.pendingSteal}
-            myId={state.myId}
-            myJustSayNo={myJustSayNo}
-            onJustSayNo={onJustSayNo}
-            onAccept={onAcceptSteal}
-          />
-        )}
+          {state.announcement && (
+            <div className="truncate rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-1.5 text-center text-sm font-semibold text-amber-200 [@media(max-height:560px)]:py-0.5 [@media(max-height:560px)]:text-xs">
+              {state.announcement}
+            </div>
+          )}
 
-        {/* Ödeme için Reddet zinciri */}
-        {state.pendingPayChallenge && (
-          <PayChallengePanel
-            challenge={state.pendingPayChallenge}
-            myId={state.myId}
-            myJustSayNo={myJustSayNo}
-            onJustSayNo={onJustSayNo}
-            onAccept={onAcceptPayChallenge}
-          />
-        )}
+          {state.pendingSteal && (
+            <PendingStealPanel
+              steal={state.pendingSteal}
+              myId={state.myId}
+              myJustSayNo={myJustSayNo}
+              onJustSayNo={onJustSayNo}
+              onAccept={onAcceptSteal}
+            />
+          )}
 
-        {/* Sıradaki ödemeler — herkes görsün */}
-        {state.paymentQueue.length > 0 && !state.pendingPayChallenge && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-950/30 px-4 py-2.5 text-sm">
-            <span className="mr-2 font-bold text-amber-200">Bekleyen ödemeler:</span>
-            {state.paymentQueue.map((q, i) => (
-              <span key={q.id} className={`mr-3 ${q.active ? "font-semibold text-white" : "text-amber-200/70"}`}>
-                {q.active ? "▶ " : `${i + 1}. `}{q.fromName} → {q.toName} {q.amount}M
-              </span>
-            ))}
-          </div>
-        )}
+          {state.pendingPayChallenge && (
+            <PayChallengePanel
+              challenge={state.pendingPayChallenge}
+              myId={state.myId}
+              myJustSayNo={myJustSayNo}
+              onJustSayNo={onJustSayNo}
+              onAccept={onAcceptPayChallenge}
+            />
+          )}
 
-        {/* Rakipler */}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {opponents.map(p => (
-            <OpponentPanel key={p.id} player={p} active={p.id === state.currentPlayerId} />
-          ))}
+          {paying && state.activePayment && !state.pendingPayChallenge && (
+            <PaymentPanel
+              payment={state.activePayment}
+              players={state.players}
+              payable={payable}
+              selected={selected}
+              setSelected={setSelected}
+              onPay={onPay}
+              myJustSayNo={myJustSayNo}
+              onJustSayNo={onJustSayNo}
+            />
+          )}
+
+          {state.paymentQueue.length > 0 && !state.pendingPayChallenge && !paying && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-500/30 bg-amber-950/30 px-3 py-1.5 text-xs">
+              <span className="font-bold text-amber-200">Bekleyen ödemeler:</span>
+              {state.paymentQueue.map((q, i) => (
+                <span key={q.id} className={q.active ? "font-semibold text-white" : "text-amber-200/70"}>
+                  {q.active ? "▶ " : `${i + 1}. `}{q.fromName} → {q.toName} {q.amount}M
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Benim alanım */}
-        {me && (
-          <MyArea
-            me={me}
-            myCompleteSets={myCompleteSets}
-            isMyTurn={isMyTurn}
-            onMoveWild={(propId, colors) => setModal({ t: "moveWild", propertyId: propId, colors })}
-          />
-        )}
+        {/* ── ORTA: oyuncu şeritleri (kaydırılır) ── */}
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          {opponents.map(p => (
+            <PlayerRow
+              key={p.id}
+              player={p}
+              active={p.id === state.currentPlayerId}
+            />
+          ))}
 
-        {/* Ödeme paneli */}
-        {paying && state.activePayment && !state.pendingPayChallenge && (
-          <PaymentPanel
-            payment={state.activePayment}
-            players={state.players}
-            payable={payable}
-            selected={selected}
-            setSelected={setSelected}
-            onPay={onPay}
-            myJustSayNo={myJustSayNo}
-            onJustSayNo={onJustSayNo}
-          />
-        )}
+          {me && (
+            <PlayerRow
+              player={me}
+              active={isMyTurn}
+              isMe
+              onMoveWild={(propId, colors) => setModal({ t: "moveWild", propertyId: propId, colors })}
+              canMoveWild={isMyTurn}
+            />
+          )}
 
-        {/* Elim */}
-        <div className="rounded-2xl border border-slate-700/50 bg-gradient-to-b from-slate-900/90 to-slate-800/90 p-4 shadow-inner">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-base font-bold text-white">Elim</span>
-              <span className="rounded-full bg-slate-700 px-2.5 py-0.5 text-xs font-medium text-slate-300">{hand.length} kart</span>
+          <details className="rounded-lg bg-black/30 px-3 py-1.5 text-[11px] text-slate-400">
+            <summary className="cursor-pointer select-none font-medium text-slate-500">Oyun kaydı</summary>
+            <div className="mt-1 max-h-28 overflow-y-auto font-mono">
+              {state.logs.slice(-15).map(l => <div key={l.id} className="py-0.5">{l.message}</div>)}
+            </div>
+          </details>
+        </div>
+
+        {/* ── ALT: elim, her zaman görünür ── */}
+        <div className="mt-2 shrink-0 rounded-xl border border-slate-700/60 bg-slate-900/95 p-2 shadow-lg">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white">Elim</span>
+              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[11px] text-slate-300">{hand.length}</span>
               {discardMode && (
-                <span className="rounded-full bg-red-500/20 border border-red-500/30 px-2.5 py-0.5 text-xs font-bold text-red-300 animate-pulse">
-                  {discardSelected.size}/{discardNeeded} kart seçildi — at ve turu bitir
+                <span className="animate-pulse rounded-full border border-red-500/30 bg-red-500/20 px-2 py-0.5 text-[11px] font-bold text-red-300">
+                  {discardSelected.size}/{discardNeeded} seçildi
                 </span>
               )}
+              {canPlay && !discardMode && (
+                <span className="hidden text-[11px] text-slate-500 sm:inline">Oynamak için karta dokun</span>
+              )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex shrink-0 gap-2">
               {discardMode && (
                 <button type="button" onClick={() => { setDiscardMode(false); setDiscardSelected(new Set()); }}
-                  className="rounded-xl bg-slate-600 px-4 py-2 text-sm font-medium text-slate-200 hover:bg-slate-500 transition-colors">
+                  className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-500">
                   İptal
                 </button>
               )}
@@ -207,36 +228,48 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
                 <button type="button"
                   onClick={handleEndTurn}
                   disabled={discardMode && discardSelected.size < discardNeeded}
-                  className="rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-2 text-sm font-bold text-white shadow-lg shadow-emerald-500/20 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-40 transition-all">
+                  className="rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-40">
                   {discardMode ? `${discardSelected.size} kart at ve bitir` : "Turu Bitir"}
                 </button>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
             {hand.map(c => (
               <Card
                 key={c.instanceId}
                 card={c}
+                small={compact}
                 selected={discardMode && discardSelected.has(c.instanceId)}
                 onClick={(canPlay || discardMode) ? () => clickCard(c) : undefined}
                 disabled={!canPlay && !discardMode}
               />
             ))}
-            {hand.length === 0 && <p className="text-sm text-slate-500 italic">Elin boş</p>}
+            {hand.length === 0 && <p className="py-4 text-sm italic text-slate-500">Elin boş</p>}
           </div>
         </div>
-
-        {/* Log */}
-        <div className="max-h-20 overflow-y-auto rounded-xl bg-black/30 p-3 text-xs text-slate-400 font-mono">
-          {state.logs.slice(-8).map(l => <div key={l.id} className="py-0.5">{l.message}</div>)}
-        </div>
       </div>
 
-      {/* Sağ: Chat */}
-      <div className="hidden w-72 shrink-0 lg:block">
+      {/* Sağ: Chat (geniş ekran) */}
+      <div className="hidden w-72 shrink-0 xl:block">
         <Chat messages={state.chat} onSend={onChat} myName={me?.name} />
       </div>
+
+      {/* Chat (dar ekranda çekmece) */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-black/60 xl:hidden" onClick={() => setChatOpen(false)}>
+          <div className="h-full w-80 max-w-[85vw] bg-slate-900 p-3 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-bold text-white">Sohbet</span>
+              <button type="button" onClick={() => setChatOpen(false)}
+                className="rounded-lg bg-slate-700 px-2 py-1 text-sm text-slate-300">✕</button>
+            </div>
+            <div className="h-[calc(100%-2.5rem)]">
+              <Chat messages={state.chat} onSend={onChat} myName={me?.name} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Modals ─── */}
       {modal.t === "color" && (
@@ -362,195 +395,192 @@ export function GameBoard({ state, onBank, onProperty, onAction, onPay, onEndTur
   );
 }
 
-// ─── STATUS BAR ───
+// ─── EKRAN YARDIMCILARI ───
 
-function StatusBar({ state, isMyTurn, onReset }: { state: GameState; isMyTurn: boolean; onReset: () => void }) {
-  const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+/** Kısa ekranda (yatay telefon) kartları küçült */
+function useCompact() {
+  const [compact, setCompact] = useState(false);
+  useEffect(() => {
+    const m = window.matchMedia("(max-height: 560px)");
+    const update = () => setCompact(m.matches);
+    update();
+    m.addEventListener("change", update);
+    return () => m.removeEventListener("change", update);
+  }, []);
+  return compact;
+}
+
+/** Dar ve dikey ekranda telefonu çevirmeyi öner — masa yatayda okunuyor */
+function RotateHint() {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-800/70 px-5 py-3 shadow-md border border-slate-700/50">
+    <div className="fixed inset-0 z-50 hidden flex-col items-center justify-center gap-4 bg-slate-950 p-8 text-center portrait:max-lg:flex">
+      <div className="animate-pulse text-6xl">📱</div>
+      <p className="text-xl font-black text-white">Telefonu yatay çevir</p>
+      <p className="max-w-xs text-sm leading-relaxed text-slate-400">
+        Masada 4 oyuncunun kartları var. Yatay ekranda hepsi tek bakışta görünüyor.
+      </p>
+    </div>
+  );
+}
+
+// ─── DURUM ÇUBUĞU ───
+
+function StatusBar({ state, isMyTurn, onReset, onToggleChat }: {
+  state: GameState; isMyTurn: boolean; onReset: () => void; onToggleChat: () => void;
+}) {
+  const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+  const unread = state.chat.length;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-700/50 bg-slate-800/80 px-3 py-2 shadow-md">
       {state.phase === "finished" ? (
         <>
-          <span className="text-lg font-black text-yellow-300">🏆 {state.winnerName} KAZANDI!</span>
+          <span className="text-base font-black text-yellow-300">🏆 {state.winnerName} KAZANDI!</span>
           <button type="button" onClick={onReset}
-            className="ml-auto rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 px-5 py-2 text-sm font-bold text-white shadow-lg hover:from-emerald-500 hover:to-emerald-400 transition-all">
+            className="ml-auto rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-1.5 text-xs font-bold text-white shadow-md hover:from-emerald-500 hover:to-emerald-400">
             🔄 Yeni Oyun
           </button>
         </>
       ) : (
         <>
-          <div className="flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${isMyTurn ? "bg-green-400 animate-pulse" : "bg-amber-400"}`} />
-            <span className="font-bold text-white">
+          <div className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${isMyTurn ? "animate-pulse bg-green-400" : "bg-amber-400"}`} />
+            <span className="text-sm font-bold text-white">
               {isMyTurn ? "SENİN TURUN" : `${currentPlayer?.name ?? "?"} oynuyor`}
             </span>
           </div>
           {isMyTurn && state.playsRemaining > 0 && (
-            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-3 py-1 text-sm font-semibold text-amber-300">
-              {state.playsRemaining} hamle hakkı
+            <span className="rounded-full border border-amber-500/30 bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+              {state.playsRemaining} hamle kaldı
             </span>
           )}
-          {isMyTurn && state.playsRemaining === 0 && (
-            <span className="rounded-full bg-red-500/20 border border-red-500/30 px-3 py-1 text-sm font-semibold text-red-300 animate-pulse">
-              Hamle hakkın bitti — Turu Bitir!
+          {isMyTurn && state.playsRemaining === 0 && !state.activePayment && (
+            <span className="animate-pulse rounded-full border border-red-500/30 bg-red-500/20 px-2 py-0.5 text-[11px] font-semibold text-red-300">
+              Hamle bitti — Turu Bitir
             </span>
           )}
           {state.activePayment && (
-            <span className="rounded-full bg-orange-500/20 border border-orange-500/30 px-3 py-1 text-sm font-semibold text-orange-300">
-              Ödemeler bekleniyor
+            <span className="rounded-full border border-orange-500/30 bg-orange-500/20 px-2 py-0.5 text-[11px] font-semibold text-orange-300">
+              Ödeme bekleniyor
             </span>
           )}
-          <span className="ml-auto text-sm text-slate-400">Deste: {state.drawPileCount}</span>
+          <span className="ml-auto text-[11px] text-slate-400">Deste: {state.drawPileCount}</span>
+          <button type="button" onClick={onToggleChat}
+            className="rounded-lg bg-slate-700 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-600 xl:hidden">
+            💬 {unread > 0 && unread}
+          </button>
         </>
       )}
     </div>
   );
 }
 
-// ─── OPPONENT PANEL (FIX 6: detailed opponent view) ───
+// ─── OYUNCU ŞERİDİ — her oyuncu masada kendi bandında ───
 
-function OpponentPanel({ player, active }: { player: PublicPlayer; active: boolean }) {
+function PlayerRow({ player, active, isMe, onMoveWild, canMoveWild }: {
+  player: PublicPlayer;
+  active: boolean;
+  isMe?: boolean;
+  onMoveWild?: (propId: string, colors: PropertyColor[]) => void;
+  canMoveWild?: boolean;
+}) {
   const grouped = groupProps(player.properties);
   const bankTotal = player.bank.reduce((s, c) => s + c.bankValue, 0);
+  const empty = grouped.length === 0 && player.bank.length === 0;
 
   return (
-    <div className={`rounded-2xl border p-4 transition-all ${active ? "border-amber-400/60 bg-amber-950/20 shadow-lg shadow-amber-500/10" : "border-slate-700/40 bg-slate-800/50"} ${!player.connected ? "opacity-60" : ""}`}>
-      <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {active && <div className="h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" />}
-          <span className="font-bold text-white text-base">{player.name}</span>
-          {!player.connected && (
-            <span className="rounded bg-slate-600 px-1.5 py-0.5 text-[9px] font-bold text-slate-400">OFFLINE</span>
-          )}
+    <div className={`flex gap-2 rounded-xl border px-2 py-1.5 transition-all ${
+      active ? "border-amber-400/70 bg-amber-950/25 shadow-md shadow-amber-500/5"
+        : isMe ? "border-blue-500/40 bg-slate-800/60"
+          : "border-slate-700/40 bg-slate-800/40"
+    } ${!player.connected ? "opacity-60" : ""}`}>
+
+      {/* Kimlik sütunu — hep aynı yerde, karşılaştırması kolay */}
+      <div className="flex w-[5.5rem] shrink-0 flex-col justify-center sm:w-32">
+        <div className="flex items-center gap-1">
+          {active && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-amber-400" />}
+          <span className="truncate text-sm font-bold text-white">{player.name}</span>
+          {isMe && <span className="shrink-0 rounded bg-blue-500/25 px-1 text-[9px] font-bold text-blue-300">SEN</span>}
         </div>
-        <div className="flex items-center gap-2 text-xs text-slate-400">
-          <span className="rounded bg-slate-700 px-1.5 py-0.5">{player.handCount} kart</span>
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${player.completeSetCount >= 3 ? "bg-yellow-500 text-black animate-pulse" : "bg-slate-700 text-slate-300"}`}>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-none">
+          <span className={`rounded px-1 py-0.5 font-bold ${
+            player.completeSetCount >= 2 ? "bg-yellow-500 text-black" : "bg-slate-700 text-slate-300"
+          }`}>
             {player.completeSetCount}/3
           </span>
+          <span className="text-slate-400">{player.handCount} kart</span>
+          <span className="font-semibold text-emerald-400">{bankTotal}M</span>
+          {!player.connected && <span className="text-slate-500">çevrimdışı</span>}
         </div>
       </div>
 
-      {grouped.length > 0 ? (
-        <div className="space-y-2">
-          {grouped.map(([color, props]) => {
-            const complete = props.length >= SET_SIZES[color] && props.some(x => x.kind === "property");
-            return (
-              <PropertySet key={color} color={color} props={props} buildings={player.buildings[color]} size="small" complete={complete} />
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-xs italic text-slate-500">Henüz mülk yok</p>
-      )}
+      {/* Masadaki kartları — yatay kaydırma */}
+      <div className="flex min-w-0 flex-1 items-start gap-1.5 overflow-x-auto pb-0.5">
+        {empty && <span className="self-center text-[11px] italic text-slate-600">masada kart yok</span>}
 
-      {player.bank.length > 0 && (
-        <div className="mt-3 border-t border-slate-700/30 pt-2">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[10px] font-medium text-slate-500">BANKA</span>
-            <span className="text-xs font-bold text-emerald-400">{bankTotal}M</span>
+        {grouped.map(([color, props]) => (
+          <PropertySet
+            key={color}
+            color={color}
+            props={props}
+            buildings={player.buildings[color]}
+            complete={props.length >= SET_SIZES[color] && props.some(x => x.kind === "property")}
+            canMoveWild={canMoveWild}
+            onMoveWild={onMoveWild}
+          />
+        ))}
+
+        {player.bank.length > 0 && (
+          <div className="shrink-0 rounded-lg border border-emerald-700/30 bg-emerald-950/20 p-1">
+            <div className="mb-0.5 flex items-center gap-1 px-0.5">
+              <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600">Banka</span>
+              <span className="text-[10px] font-black text-emerald-300">{bankTotal}M</span>
+            </div>
+            <div className="flex gap-0.5">
+              {player.bank.map(c => <Card key={c.instanceId} card={c} small />)}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {player.bank.map(c => <Card key={c.instanceId} card={c} small />)}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
-// ─── MY AREA (FIX 4: wild move button) ───
+// ─── MÜLK SETİ ───
 
-function MyArea({ me, myCompleteSets, isMyTurn, onMoveWild }: {
-  me: PublicPlayer; myCompleteSets: PropertyColor[];
-  isMyTurn: boolean;
-  onMoveWild: (propId: string, colors: PropertyColor[]) => void;
-}) {
-  const grouped = groupProps(me.properties);
-  const bankTotal = me.bank.reduce((s, c) => s + c.bankValue, 0);
-
-  return (
-    <div className="rounded-2xl border-2 border-blue-500/30 bg-gradient-to-b from-slate-800/60 to-slate-900/60 p-5 shadow-lg">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-black text-white">{me.name}</span>
-          <span className="rounded-full bg-blue-500/20 border border-blue-500/30 px-2.5 py-0.5 text-xs font-bold text-blue-300">SEN</span>
-          <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${me.completeSetCount >= 3 ? "bg-yellow-500 text-black animate-pulse" : "bg-slate-700 text-slate-300"}`}>
-            {me.completeSetCount}/3 set
-          </span>
-        </div>
-        <div className="text-right">
-          <span className="text-lg font-bold text-emerald-400">{bankTotal}M</span>
-          <span className="ml-1 text-xs text-slate-400">banka</span>
-        </div>
-      </div>
-
-      {grouped.length > 0 && (
-        <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {grouped.map(([color, props]) => (
-            <PropertySet
-              key={color}
-              color={color}
-              props={props}
-              buildings={me.buildings[color]}
-              complete={myCompleteSets.includes(color)}
-              isMyTurn={isMyTurn}
-              onMoveWild={onMoveWild}
-            />
-          ))}
-        </div>
-      )}
-
-      {me.bank.length > 0 && (
-        <div className="mt-3 border-t border-slate-700/50 pt-3">
-          <p className="mb-2 text-xs font-medium text-slate-400">Banka</p>
-          <div className="flex flex-wrap gap-1.5">
-            {me.bank.map(c => <Card key={c.instanceId} card={c} small />)}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── PROPERTY SET (FIX 4: wild move button, FIX 6: complete badge) ───
-
-function PropertySet({ color, props, buildings, complete, size, isMyTurn, onMoveWild }: {
+function PropertySet({ color, props, buildings, complete, canMoveWild, onMoveWild }: {
   color: PropertyColor; props: PlacedProperty[];
   buildings?: { house: boolean; hotel: boolean };
-  complete?: boolean; size?: "small";
-  isMyTurn?: boolean;
+  complete?: boolean;
+  canMoveWild?: boolean;
   onMoveWild?: (propId: string, colors: PropertyColor[]) => void;
 }) {
   const needed = SET_SIZES[color];
-  const isSmall = size === "small";
 
   return (
-    <div className={`rounded-xl border p-2 transition-all ${complete ? "border-yellow-400/50 bg-yellow-500/5 shadow-sm shadow-yellow-500/10" : "border-slate-700/30 bg-slate-900/30"}`}>
-      <div className="mb-1.5 flex items-center gap-2">
-        <div className="h-3 w-8 rounded-sm" style={{ background: COLOR_HEX[color] }} />
-        <span className={`font-semibold text-slate-300 ${isSmall ? "text-[10px]" : "text-xs"}`}>
-          {COLOR_LABELS[color]}
-        </span>
-        <span className={`ml-auto text-slate-500 ${isSmall ? "text-[9px]" : "text-[10px]"}`}>
-          {props.length}/{needed}
-        </span>
-        {complete && <span className="rounded bg-yellow-500/30 border border-yellow-500/40 px-1 text-[8px] font-black text-yellow-300">TAM</span>}
-        {buildings?.house && <span className="text-xs" title="Ev">🏠</span>}
-        {buildings?.hotel && <span className="text-xs" title="Otel">🏨</span>}
+    <div className={`shrink-0 rounded-lg border p-1 transition-all ${
+      complete ? "border-yellow-400/60 bg-yellow-500/10" : "border-slate-700/40 bg-slate-900/40"
+    }`}>
+      <div className="mb-0.5 flex items-center gap-1 px-0.5">
+        <span className="h-2 w-3.5 shrink-0 rounded-sm" style={{ background: COLOR_HEX[color] }} />
+        <span className="text-[9px] font-bold text-slate-400">{props.length}/{needed}</span>
+        {complete && <span className="rounded bg-yellow-500/30 px-1 text-[8px] font-black text-yellow-300">TAM</span>}
+        {buildings?.house && <span className="text-[10px]" title="Ev">🏠</span>}
+        {buildings?.hotel && <span className="text-[10px]" title="Otel">🏨</span>}
       </div>
-      <div className="flex flex-wrap gap-1">
+      <div className="flex gap-0.5">
         {props.map(p => (
           <div key={p.instanceId} className="relative">
             <Card card={p} small />
-            {/* FIX 4: Move wild button */}
-            {isMyTurn && onMoveWild && p.kind === "wild_property" && (
+            {canMoveWild && onMoveWild && p.kind === "wild_property" && (
               <button
                 type="button"
                 onClick={() => {
-                  const available = p.isMultiWild ? ALL_COLORS.filter(c => c !== p.assignedColor) : (p.colors ?? []).filter(c => c !== p.assignedColor);
+                  const available = p.isMultiWild
+                    ? ALL_COLORS.filter(c => c !== p.assignedColor)
+                    : (p.colors ?? []).filter(c => c !== p.assignedColor);
                   onMoveWild(p.instanceId, available);
                 }}
-                className="absolute -top-1 -right-1 z-10 h-5 w-5 rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-md hover:bg-blue-500 transition-colors flex items-center justify-center"
+                className="absolute -right-1 -top-1 z-10 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-bold text-white shadow-md hover:bg-blue-500"
                 title="Jokeri başka sete taşı"
               >
                 ↔
