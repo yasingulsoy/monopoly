@@ -6,8 +6,28 @@ import type { GameState, PlayActionParams, PropertyColor } from "./types";
 
 const WS = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:3001";
 const NAME_KEY = "istanbul-deal:name";
+const DEVICE_KEY = "istanbul-deal:device";
 
 const savedName = () => { try { return localStorage.getItem(NAME_KEY); } catch { return null; } };
+
+/**
+ * Tarayıcıya özel sabit kimlik. Sunucu bununla "bir cihaz = bir oyuncu" kuralını
+ * uyguluyor; aynı tarayıcının ikinci sekmesinden başka bir isimle girilemiyor.
+ * localStorage sekmeler arasında ortak olduğu için bu iş görüyor.
+ */
+let memDevice: string | null = null;
+function deviceId(): string {
+  const make = () =>
+    (globalThis.crypto?.randomUUID?.() ?? `d${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) { id = make(); localStorage.setItem(DEVICE_KEY, id); }
+    return id;
+  } catch {
+    // Gizli sekme / depolama kapalı: oturum boyunca geçerli kimlik üret
+    return (memDevice ??= make());
+  }
+}
 
 export function useGame() {
   const socket = useRef<Socket | null>(null);
@@ -26,7 +46,7 @@ export function useGame() {
       setConnected(true);
       // Sayfa yenileme / ağ kopması sonrası kaydedilmiş isimle otomatik geri dön
       const n = savedName();
-      if (n) s.emit("join", { name: n });
+      if (n) s.emit("join", { name: n, device: deviceId() });
     });
     s.on("disconnect", () => setConnected(false));
     s.on("game:state", (st: GameState) => { setState(st); setJoined(!!st.myId); });
@@ -43,7 +63,7 @@ export function useGame() {
     clearError: () => setError(null),
     join: (name: string) => {
       try { localStorage.setItem(NAME_KEY, name.trim()); } catch { /* özel pencere vb. */ }
-      emit("join", { name });
+      emit("join", { name, device: deviceId() });
     },
     chat: (text: string) => emit("chat:send", { text }),
     start: () => emit("game:start"),

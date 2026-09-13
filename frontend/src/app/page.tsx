@@ -26,7 +26,9 @@ export default function Home() {
     );
   }
 
-  const inLobby = !g.joined || g.state.phase === "lobby";
+  const st = g.state;
+  const inLobby = !g.joined || st.phase === "lobby";
+  const myName = st.players.find(p => p.id === st.myId)?.name;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-slate-950 text-white">
@@ -71,6 +73,7 @@ export default function Home() {
             players={g.state.players.map(p => ({ name: p.name, connected: p.connected }))}
             connected={g.connected}
             phase={g.state.phase}
+            joinedAs={myName}
             onJoin={g.join}
             onStart={g.start}
           />

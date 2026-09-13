@@ -58,9 +58,9 @@ io.on("connection", (socket) => {
   socket.emit("game:state", game.view());
   socket.emit("voice:roster", [...voice]);
 
-  socket.on("join", ({ name }: { name: string }) => {
+  socket.on("join", ({ name, device }: { name: string; device?: string }) => {
     try {
-      const r = game.join(String(name ?? ""));
+      const r = game.join(String(name ?? ""), device ? String(device).slice(0, 100) : undefined);
       if ("error" in r) return socket.emit("error", { message: r.error });
       socket.data.pid = r.pid;
       activeSocket.set(r.pid, socket.id);

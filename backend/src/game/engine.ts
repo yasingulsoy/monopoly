@@ -53,6 +53,13 @@ export class Game {
   pendingPayChallenge: PendingPayChallenge | null = null;
   pendingRent: { from: string; color: PropertyColor; amount: number; type: "all"|"one"; to?: string; doubled: boolean } | null = null;
 
+  /**
+   * Cihaz kimliği → oyuncu. Bir tarayıcıdan yalnızca tek oyuncu oynayabilir;
+   * ikinci sekmeden başka bir isimle girilmesini engeller.
+   * (IP'ye bakmıyoruz — aynı wifi'deki farklı cihazlar engellenmemeli.)
+   */
+  private devices = new Map<string, string>();
+
   constructor(
     public allowedNames: string[],
     public minPlayers: number = 2,
@@ -79,7 +86,7 @@ export class Game {
    * Oyuncuyu ismiyle kaydeder ve sabit kimliğini döndürür.
    * Aynı isimle tekrar gelen (yeniden bağlanan) oyuncu mevcut kaydına geri döner.
    */
-  join(name: string): { pid: string } | { error: string } {
+  join(name: string, device?: string): { pid: string } | { error: string } {
     const trimmed = name.trim();
     if (!trimmed) return { error: "İsim gerekli" };
     const pid = slug(trimmed);
@@ -87,10 +94,20 @@ export class Game {
       return { error: `Geçersiz isim. İzin verilen: ${this.allowedNames.join(", ")}` };
     }
 
+    // Bu cihaz başka bir oyuncuya bağlıysa ve o oyuncu hâlâ oyundaysa, isim değiştirilemez
+    if (device) {
+      const bound = this.devices.get(device);
+      const boundPlayer = bound ? this.p(bound) : undefined;
+      if (bound && bound !== pid && boundPlayer) {
+        return { error: `Bu cihazdan zaten ${boundPlayer.name} olarak oynuyorsun. Başka bir oyuncu için farklı cihaz kullanın.` };
+      }
+    }
+
     const existing = this.p(pid);
     if (existing) {
       const wasConnected = existing.connected;
       existing.connected = true;
+      if (device) this.devices.set(device, pid);
       this.log(wasConnected ? `${existing.name} başka bir cihazdan bağlandı` : `${existing.name} tekrar bağlandı`);
       return { pid };
     }
@@ -100,6 +117,7 @@ export class Game {
       return { error: `Oda dolu (max ${this.maxPlayers} oyuncu)` };
     }
     this.players.push({ id: pid, name: trimmed, hand: [], bank: [], properties: [], buildings: {}, connected: true });
+    if (device) this.devices.set(device, pid);
     this.log(`${trimmed} katıldı (${this.players.filter(x => x.connected).length}/${this.maxPlayers})`);
     return { pid };
   }

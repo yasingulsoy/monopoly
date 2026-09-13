@@ -11,6 +11,8 @@ interface Props {
   onJoin: (name: string) => void;
   onStart: () => void;
   phase?: "lobby" | "playing" | "finished";
+  /** Bu cihazdan katılmış oyuncunun adı — katıldıysan isim formu kapanır */
+  joinedAs?: string;
 }
 
 export function Lobby({
@@ -22,6 +24,7 @@ export function Lobby({
   onJoin,
   onStart,
   phase = "lobby",
+  joinedAs,
 }: Props) {
   const [name, setName] = useState("");
   const online = players.filter((p) => p.connected).length;
@@ -61,29 +64,40 @@ export function Lobby({
           </p>
         </div>
 
-        {/* İsim girişi */}
-        <div className="mb-6">
-          <label className="text-sm font-medium text-slate-300 mb-2 block">Adını seç ve katıl</label>
-          <div className="flex gap-2">
-            <input
-              list="names"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="İsim seç..."
-              disabled={roomFull && !isReconnect(name)}
-              className="flex-1 rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-white outline-none focus:border-blue-500 disabled:opacity-50 transition-colors"
-            />
-            <datalist id="names">{allowedNames.map((n) => <option key={n} value={n} />)}</datalist>
-            <button
-              type="button"
-              onClick={() => onJoin(name)}
-              disabled={!connected || !name.trim() || (roomFull && !isReconnect(name))}
-              className="rounded-xl bg-blue-600 px-6 py-3 font-bold hover:bg-blue-500 disabled:opacity-40 transition-colors"
-            >
-              Katıl
-            </button>
+        {/* İsim girişi — katıldıysan kapanır (bir cihaz = bir oyuncu) */}
+        {joinedAs ? (
+          <div className="mb-6 rounded-2xl border border-emerald-500/40 bg-emerald-950/40 p-4 text-center">
+            <p className="text-sm text-emerald-200">
+              <span className="font-bold">{joinedAs}</span> olarak katıldın
+            </p>
+            <p className="mt-1 text-xs text-emerald-300/70">
+              Bu cihazdan tek oyuncu oynayabilir. Diğerleri kendi telefon/bilgisayarından girsin.
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="mb-6">
+            <label className="text-sm font-medium text-slate-300 mb-2 block">Adını seç ve katıl</label>
+            <div className="flex gap-2">
+              <input
+                list="names"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="İsim seç..."
+                disabled={roomFull && !isReconnect(name)}
+                className="flex-1 rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-white outline-none focus:border-blue-500 disabled:opacity-50 transition-colors"
+              />
+              <datalist id="names">{allowedNames.map((n) => <option key={n} value={n} />)}</datalist>
+              <button
+                type="button"
+                onClick={() => onJoin(name)}
+                disabled={!connected || !name.trim() || (roomFull && !isReconnect(name))}
+                className="rounded-xl bg-blue-600 px-6 py-3 font-bold hover:bg-blue-500 disabled:opacity-40 transition-colors"
+              >
+                Katıl
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Oyuncu listesi */}
         <div className="space-y-2 mb-6">
